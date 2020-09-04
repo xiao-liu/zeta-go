@@ -79,8 +79,12 @@ def tree_search(root, network, device, conf):
             break
 
     # backup
+    # notice that it is necessary to alternate the sign of v because one
+    # player's win is another player's loss, and vice versa
+    # the AlphaGo Zero paper does not emphasize this
     v = node.v
     while node != root:
+        v = -v
         node.parent.n[node.action] += 1
         node.parent.w[node.action] += v
         node = node.parent
