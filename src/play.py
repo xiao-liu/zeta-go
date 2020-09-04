@@ -10,8 +10,15 @@ from network import ZetaGoNetwork
 from predict import extract_feature
 
 
-def self_play(network, device, conf):
+def self_play(network, device, resign_threshold, conf):
     examples = []
+
+    allow_resign = resign_threshold > -1.0 \
+        and np.random.rand() >= conf.RESIGN_SAMPLE_RATE
+    resign_value_history = None if allow_resign else []
+
+    # result undecided
+    result = 0.0
 
     # create a search tree
     root = TreeNode(None, None, network, device, conf)
@@ -22,6 +29,17 @@ def self_play(network, device, conf):
         # perform MCTS
         for _ in range(conf.NUM_SIMULATIONS):
             tree_search(root, network, device, conf)
+
+        # we follow AlphaGo's method to calculate the resignation value
+        # notice that children with n = 0 are skipped by setting their
+        # value to be -1.0 (w / n > -1.0 for children with n > 0)
+        resign_value = max(
+            map(lambda w, n: -1.0 if n == 0 else w / n, root.w, root.n))
+        if not allow_resign:
+            resign_value_history.append([resign_value, root.go.turn])
+        elif -1.0 < resign_value <= resign_threshold:
+            result = 1.0 if root.go.turn == WHITE else -1.0
+            break
 
         # calculate the distribution of action selection
         # notice that illegal actions always have zero probability as
@@ -64,14 +82,16 @@ def self_play(network, device, conf):
             break
         previous_action = action
 
-    score_black, score_white = root.go.score()
-    result = 1.0 if score_black > score_white else -1.0
+    # calculate the scores if the result is undecided
+    if result == 0.0:
+        score_black, score_white = root.go.score()
+        result = 1.0 if score_black > score_white else -1.0
 
     # update the the game winner from the perspective of each player
     for i in range(len(examples)):
         examples[i][2] *= result
 
-    return examples
+    return examples, resign_value_history, result
 
 
 def play_against_network(network, opponent_network, device, color, conf):

@@ -101,6 +101,19 @@ CONFIGURATIONS = {
 
         # frequency of checkpoint
         'CHECKPOINT_FREQUENCY': 1000,
+
+        # ---- resignation settings ----
+        # maximal fraction of regretful resignations (i.e., games that
+        # could have been won if the player had not resigned)
+        'RESIGN_REGRET_FRAC': 0.05,
+
+        # fraction of self-plays that we will disable resignation and
+        # play out until termination
+        'RESIGN_SAMPLE_RATE': 0.1,
+
+        # the minimal number of samples required to calculate the
+        # resignation threshold
+        'NUM_RESIGN_SAMPLES': 1000,
     },
     '9x9': {
         # ---- basic game settings ----
@@ -142,6 +155,11 @@ CONFIGURATIONS = {
         'WIN_RATE_MARGIN': 0.55,
         'EXAMPLE_POOL_SIZE': 100000,
         'CHECKPOINT_FREQUENCY': 1000,
+
+        # ---- resignation settings ----
+        'RESIGN_REGRET_FRAC': 0.05,
+        'RESIGN_SAMPLE_RATE': 0.1,
+        'NUM_RESIGN_SAMPLES': 1000,
     },
 }
 
@@ -187,6 +205,9 @@ Config = collections.namedtuple(
         'WIN_RATE_MARGIN',
         'EXAMPLE_POOL_SIZE',
         'CHECKPOINT_FREQUENCY',
+        'RESIGN_REGRET_FRAC',
+        'RESIGN_SAMPLE_RATE',
+        'NUM_RESIGN_SAMPLES',
     ]
 )
 

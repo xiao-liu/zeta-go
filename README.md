@@ -87,8 +87,21 @@ the comparison of the neural networks, and the generation of self-play data) are
 asynchronously executed in parallel.
 In ZetaGo, because it is single-threaded, the three components run sequentially.
 
-* The resignation system has not been implemented yet.
-ZetaGo will play each game until termination.
+* The description of AlphaGo Zero's resignation system lacks details.
+In the paper, the authors wrote:
+"AlphaGo Zero resigns if its root value and best child value are lower than a
+threshold value v_resign."
+However they never defined what "root value" and "child value" are.
+The description of resignation in AlphaGo is much clearer, in which they
+explicitly used quantity max_a{Q(s, a)} (the best action value of the root s) to
+determine resignation.
+I believe this is also the definition of root value for AlphaGo Zero, and the
+child value is just the best action value of the child node in question.
+(But remember to negate the child value before you use it, as it is calculated
+from the opponent's perspective. Actually you need to repeatedly negate the
+value at the backup stage of MCTS as well, and the paper does not emphasize
+this. See the code at the end of `mcts.py`.)
+In ZetaGo, I consider root value only for simplicity.
 
 # Usage
 ZetaGo provides three basic functions:
@@ -217,6 +230,11 @@ Following is an introduction to each file:
 
   The code that calculates the prediction of a neural network for a given input,
   applying a random Dihedral transformation if necessary.
+
+* `resign.py`
+
+  The code that calculates the threshold for resignation based on recent
+  self-play history.
 
 * `train.py`
 

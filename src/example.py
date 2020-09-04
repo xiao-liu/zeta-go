@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 from play import self_play
+from resign import ResignManager
 
 
 class ExamplePool:
@@ -24,13 +25,21 @@ class ExamplePool:
         # records the current position when traversing the examples
         self.pos = 0
 
+        # resignation manager
+        self.resign_mgr = ResignManager(conf)
+
     def generate_examples(self, network, device):
         for i in range(self.conf.GAMES_PER_ITERATION):
             log.info(f'starting self-play {i}...')
-            examples = self_play(network, device, self.conf)
+            examples, resign_value_history, result = self_play(
+                network, device, self.resign_mgr.threshold(), self.conf)
             log.info(f'{len(examples)} examples generated in self-play {i}')
             self.example_pool += examples
             self.game_length.append(len(examples))
+
+            # add the history into resignation manager to update the threshold
+            if resign_value_history is not None:
+                self.resign_mgr.add(resign_value_history, result)
 
         # discard old examples when pool is full
         if len(self.game_length) > self.conf.EXAMPLE_POOL_SIZE:
