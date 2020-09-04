@@ -5,6 +5,7 @@ from datetime import datetime
 from glob import glob
 import os
 import sys
+import torch.multiprocessing as mp
 
 from config import CONFIGURATIONS
 from play import play_against_human
@@ -16,7 +17,7 @@ def process_train():
     sub_parser = argparse.ArgumentParser(
         usage=(
             f'python {sys.argv[0]} train [--model_name MODEL_NAME] '
-            f'[--config CONFIG]\n       '
+            f'[--config CONFIG] [--num_workers NUM_WORKERS]\n       '
             f'python {sys.argv[0]} train [-h]\n'
         )
     )
@@ -35,6 +36,15 @@ def process_train():
             'defined in config.py (default: 19x19)'
         ),
     )
+    sub_parser.add_argument(
+        '--num_workers',
+        type=int,
+        default=4*mp.cpu_count(),
+        help=(
+            f'number of processes to perform self-play and compare networks '
+            f'(default: 4 * num_of_cpus = {4 * mp.cpu_count()})'
+        ),
+    )
     sub_args = sub_parser.parse_args(sys.argv[2:])
 
     if sub_args.config not in CONFIGURATIONS:
@@ -50,7 +60,7 @@ def process_train():
         exit(-1)
     os.makedirs(model_dir, exist_ok=True)
 
-    train(model_dir, sub_args.config)
+    train(model_dir, sub_args.config, sub_args.num_workers)
 
 
 def process_resume():
@@ -58,7 +68,8 @@ def process_resume():
     sub_parser = argparse.ArgumentParser(
         usage=(
             f'python {sys.argv[0]} resume <model_name> '
-            f'[--checkpoint CHECKPOINT] [--config CONFIG]\n       '
+            f'[--checkpoint CHECKPOINT] [--config CONFIG] '
+            f'[--num_workers NUM_WORKERS]\n       '
             f'python {sys.argv[0]} resume [-h]\n'
         )
     )
@@ -83,6 +94,15 @@ def process_resume():
         help=(
             f'load the specified configuration from config.py and '
             f'override the one saved in the checkpoint'
+        ),
+    )
+    sub_parser.add_argument(
+        '--num_workers',
+        type=int,
+        default=4*mp.cpu_count(),
+        help=(
+            f'number of processes to perform self-play and compare networks, '
+            f'(default: 4 * num_of_cpus = {4 * mp.cpu_count()})'
         ),
     )
     sub_args = sub_parser.parse_args(sys.argv[2:])
@@ -116,7 +136,8 @@ def process_resume():
         sub_args.config = ''
 
     # resume training
-    train(model_dir, sub_args.config, checkpoint_file=checkpoint_file)
+    train(model_dir, sub_args.config, sub_args.num_workers,
+          checkpoint_file=checkpoint_file)
 
 
 def process_play():
@@ -190,4 +211,5 @@ def main():
 
 
 if __name__ == '__main__':
+    mp.set_start_method('spawn')
     main()

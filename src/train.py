@@ -4,7 +4,7 @@ import glog as log
 import torch
 import torch.optim as optim
 
-from compare import estimate_win_rate
+from compare import Comparator
 from config import get_conf
 from example import ExamplePool
 from network import ZetaGoNetwork
@@ -16,7 +16,7 @@ def learning_rate(step, conf):
             return lr
 
 
-def train(model_dir, conf_name, checkpoint_file=None):
+def train(model_dir, conf_name, num_workers, checkpoint_file=None):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if checkpoint_file is None:
@@ -24,6 +24,7 @@ def train(model_dir, conf_name, checkpoint_file=None):
         log.info(f'model_dir={model_dir}')
         log.info(f'conf_name={conf_name}')
         log.info(f'device={device}')
+        log.info(f'num_workers={num_workers}')
 
         conf = get_conf(conf_name)
 
@@ -47,10 +48,13 @@ def train(model_dir, conf_name, checkpoint_file=None):
             weight_decay=2*conf.L2_REG,
         )
 
+        # create a comparator to compare two networks
+        comparator = Comparator(conf)
+
         # create an example pool and fill it with examples
         log.info('initializing the example pool...')
         example_pool = ExamplePool(conf)
-        example_pool.generate_examples(best_network, device)
+        example_pool.generate_examples(best_network, device, num_workers)
         example_pool.shuffle()
     else:
         log.info(f'resume training from checkpoint {checkpoint_file}')
@@ -58,6 +62,7 @@ def train(model_dir, conf_name, checkpoint_file=None):
         if conf_name != '':
             log.info(f'original configuration overridden by {conf_name}')
         log.info(f'device={device}')
+        log.info(f'num_workers={num_workers}')
 
         # load checkpoint and restore all the necessary states
         checkpoint = torch.load(checkpoint_file)
@@ -81,6 +86,8 @@ def train(model_dir, conf_name, checkpoint_file=None):
             weight_decay=2*conf.L2_REG,
         )
         optimizer.load_state_dict(checkpoint['optimizer'])
+
+        comparator = Comparator(conf)
 
         example_pool = checkpoint['example_pool']
 
@@ -127,8 +134,8 @@ def train(model_dir, conf_name, checkpoint_file=None):
                     f'[iter={iteration}] comparing current network with best '
                     f'network...'
                 )
-                win_rate = estimate_win_rate(
-                    network, best_network, device, conf)
+                win_rate = comparator.estimate_win_rate(
+                    network, best_network, device, num_workers)
                 if win_rate > conf.WIN_RATE_MARGIN:
                     log.info(
                         f'[iter={iteration}] best network updated, '
@@ -168,7 +175,7 @@ def train(model_dir, conf_name, checkpoint_file=None):
             f'[iter={iteration}] generating new examples for the next '
             f'iteration...'
         )
-        example_pool.generate_examples(best_network, device)
+        example_pool.generate_examples(best_network, device, num_workers)
         example_pool.shuffle()
 
         iteration += 1

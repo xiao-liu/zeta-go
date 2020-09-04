@@ -13,10 +13,6 @@ finish the training on my own desktop
 Given the infeasibility of training a standard AlphaGo Zero model in my
 computer, I turn to solving a smaller problem.
 In particular, I attempt to train a good model for 9x9 Go board.
-Currently it still takes about one year to finish the training even for this
-smaller setup.
-I will be working on the optimization and hopefully the execution time can be
-reduced to a few months.
 
 I have taken efforts to make ZetaGo as self-contained as possible.
 It has minimal external dependencies: `pytorch` for machine learning framework,
@@ -87,6 +83,13 @@ the comparison of the neural networks, and the generation of self-play data) are
 asynchronously executed in parallel.
 In ZetaGo, because it is single-threaded, the three components run sequentially.
 
+  The generation of self-play data and the comparison of the neural networks
+themselves support multi-processing.
+These two components are relatively easy to parallelize because different runs
+of self-play / network comparison are independent.
+In addition, paralleling the runs also allows us to submit a batch of neural
+network evaluation requests to GPU at once, which improves the I/O throughput.
+
 * The description of AlphaGo Zero's resignation system lacks details.
 In the paper, the authors wrote:
 "AlphaGo Zero resigns if its root value and best child value are lower than a
@@ -101,7 +104,6 @@ child value is just the best action value of the child node in question.
 from the opponent's perspective. Actually you need to repeatedly negate the
 value at the backup stage of MCTS as well, and the paper does not emphasize
 this. See the code at the end of `mcts.py`.)
-In ZetaGo, I consider root value only for simplicity.
 
 # Usage
 ZetaGo provides three basic functions:
@@ -133,6 +135,10 @@ If not specified, ZetaGo will use timestamp as name.
 All the checkpoints and the final model will be saved to the directory
 `models/<model_name>`.
 
+You can use the `--num_workers` flag to specify the number of processes during
+the generation of self-play data and the comparison of the networks.
+By default it is 4 times the number of CPUs in your computer.
+
 **Resume training from a previous checkpoint**
 
 Run ```python main.py resume <model_name>``` to resume the training.
@@ -141,6 +147,7 @@ You can specify a different checkpoint to resume from using the `--checkpoint`
 flag.
 Use the `--config` flag to specify a new configuration and override the one
 saved in the checkpoint (make sure that they are compatible).
+The `--num_workers` flag is also supported here.
 
 **Play Go against computer with a specified model**
 
@@ -193,6 +200,17 @@ Following is an introduction to each file:
   I re-implement them for better performance.
   You can also use their build-in counterparts if you like.
 
+* `evaluate.py`
+
+  Implementations of two evaluators which calculate the outputs of neural
+  networks for given inputs.
+  The `DefaultEvaluator` is just a wrapper of the underlying neural network.
+  The `BulkEvaluator` supports multiple processes to submit evaluation requests
+  to multiple neural networks.
+  Inside `BulkEvaluator`, it will pack e requests from different processes
+  together and submit them to the corresponding neural network at once.
+  This greatly improves the I/O throughput.
+
 * `example.py`
 
   The class that generates and manages self-play examples.
@@ -239,17 +257,3 @@ Following is an introduction to each file:
 * `train.py`
 
   The code to train a new model/resume training from a previous checkpoint.
-
-# TODO
-The next step is to optimize the performance so that a model for 9x9 Go board
-can be trained in a reasonable time.
-Two major updates are planned.
-The first one is to implement the resignation system.
-The second one is to parallelize the generation of self-play data.
-In fact, I have observed that self-play is the performance bottleneck as ZetaGo
-spends most of the time on it.
-Fortunately this part is also relatively easy to parallelize because different
-runs of self-play are independent.
-In addition, paralleling the self-play also allows us to submit a batch of
-neural network evaluation requests to GPU at once, which improves the I/O
-throughput.

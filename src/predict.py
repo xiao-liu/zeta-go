@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-import torch
-import torch.nn.functional as F
 
 from go import BLACK, WHITE
 
@@ -72,37 +70,26 @@ def extract_feature(node, conf):
     return feature
 
 
-def predict(network, device, node, conf, random_trans=False):
-    network.eval()
-    with torch.no_grad():
-        if random_trans:
-            # uniform at random choose a Dihedral transformation and
-            # apply it to the feature
-            trans = np.random.randint(8)
-            feature = dihedral_trans(
-                extract_feature(node, conf), trans, axes=(1, 2))
-            features = torch.stack([torch.from_numpy(feature)]).to(device)
+def predict(evaluator, node, conf, random_trans=False):
+    feature = extract_feature(node, conf)
 
-            log_p, v = network(features)
+    if not random_trans:
+        return evaluator.evaluate(feature)
 
-            # transform the distribution back
-            p = F.softmax(log_p, dim=1)
-            p = p.cpu().numpy()[0]
-            v = v.cpu().numpy()[0]
+    # uniform at random choose a Dihedral transformation and apply it
+    # to the feature
+    trans = np.random.randint(8)
+    feature = dihedral_trans(feature, trans, axes=(1, 2))
 
-            p_move, p_pass = p[:conf.BOARD_SIZE**2], p[conf.PASS]
-            p_move = inverse_dihedral_trans(
-                np.reshape(p_move, (conf.BOARD_SIZE, conf.BOARD_SIZE)),
-                trans,
-                axes=(0, 1),
-            )
-            p_move = np.reshape(p_move, conf.BOARD_SIZE**2)
-            p = np.append(p_move, p_pass)
-        else:
-            feature = extract_feature(node, conf)
-            features = torch.stack([torch.from_numpy(feature)]).to(device)
-            log_p, v = network(features)
-            p = F.softmax(log_p, dim=1)
-            p = p.cpu().numpy()[0]
-            v = v.cpu().numpy()[0]
+    p, v = evaluator.evaluate(feature)
+
+    # transform the distribution back
+    p_move, p_pass = p[:conf.BOARD_SIZE**2], p[conf.PASS]
+    p_move = inverse_dihedral_trans(
+        np.reshape(p_move, (conf.BOARD_SIZE, conf.BOARD_SIZE)),
+        trans,
+        axes=(0, 1),
+    )
+    p_move = np.reshape(p_move, conf.BOARD_SIZE**2)
+    p = np.append(p_move, p_pass)
     return p, v

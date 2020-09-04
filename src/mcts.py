@@ -10,7 +10,7 @@ from predict import predict
 # the definitions of n, w, q and p are the same as that in the paper
 class TreeNode:
 
-    def __init__(self, parent, action, network, device, conf):
+    def __init__(self, parent, action, evaluator, conf):
         if parent is None:
             self.go = Go(board_size=conf.BOARD_SIZE, komi=conf.KOMI)
         else:
@@ -24,10 +24,10 @@ class TreeNode:
         self.action = action
         self.n = np.zeros(conf.NUM_ACTIONS, dtype=np.int)
         self.w = np.zeros(conf.NUM_ACTIONS, dtype=np.float32)
-        self.p, self.v = predict(network, device, self, conf, random_trans=True)
+        self.p, self.v = predict(evaluator, self, conf, random_trans=True)
 
 
-def tree_search(root, network, device, conf):
+def tree_search(root, evaluator, conf):
     node = root
 
     # prepare Dirichlet noise for the root node
@@ -74,7 +74,7 @@ def tree_search(root, network, device, conf):
         else:
             # reach a leaf node, evaluate and expand
             node.children[best_action] = \
-                TreeNode(node, best_action, network, device, conf)
+                TreeNode(node, best_action, evaluator, conf)
             node = node.children[best_action]
             break
 

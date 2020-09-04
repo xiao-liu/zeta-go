@@ -3,6 +3,7 @@
 import numpy as np
 import torch
 
+from evaluate import DefaultEvaluator
 from go import BLACK, WHITE
 from gui import GUI
 from mcts import TreeNode, tree_search
@@ -10,7 +11,7 @@ from network import ZetaGoNetwork
 from predict import extract_feature
 
 
-def self_play(network, device, resign_threshold, conf):
+def self_play(evaluator, resign_threshold, conf):
     examples = []
 
     allow_resign = resign_threshold > -1.0 \
@@ -21,14 +22,14 @@ def self_play(network, device, resign_threshold, conf):
     result = 0.0
 
     # create a search tree
-    root = TreeNode(None, None, network, device, conf)
+    root = TreeNode(None, None, evaluator, conf)
 
     previous_action = None
     t = 0
     while t < conf.MAX_GAME_LENGTH:
         # perform MCTS
         for _ in range(conf.NUM_SIMULATIONS):
-            tree_search(root, network, device, conf)
+            tree_search(root, evaluator, conf)
 
         # we follow AlphaGo's method to calculate the resignation value
         # notice that children with n = 0 are skipped by setting their
@@ -94,16 +95,16 @@ def self_play(network, device, resign_threshold, conf):
     return examples, resign_value_history, result
 
 
-def play_against_network(network, opponent_network, device, color, conf):
-    # networks[0] for black player, networks[1] for white player
-    networks = [network, opponent_network]
+def play_against_network(evaluator, opponent_evaluator, color, conf):
+    # evaluators[0] for black player, evaluators[1] for white player
+    evaluators = [evaluator, opponent_evaluator]
     if color == WHITE:
-        networks[0], networks[1] = networks[1], networks[0]
-    
+        evaluators[0], evaluators[1] = evaluators[1], evaluators[0]
+
     # create search trees for both players
     roots = [None, None]
     for i in range(2):
-        roots[i] = TreeNode(None, None, networks[i], device, conf)
+        roots[i] = TreeNode(None, None, evaluators[i], conf)
 
     # black player goes first (0 for black, 1 for white)
     player = 0
@@ -113,7 +114,7 @@ def play_against_network(network, opponent_network, device, color, conf):
     while t < conf.MAX_GAME_LENGTH:
         # perform MCTS
         for _ in range(conf.NUM_SIMULATIONS):
-            tree_search(roots[player], networks[player], device, conf)
+            tree_search(roots[player], evaluators[player], conf)
 
         # calculate the distribution of action selection
         # temperature tau -> 0
@@ -129,7 +130,7 @@ def play_against_network(network, opponent_network, device, color, conf):
         for i in range(2):
             if roots[i].children[action] is None:
                 roots[i].children[action] = \
-                    TreeNode(roots[i], action, networks[i], device, conf)
+                    TreeNode(roots[i], action, evaluators[i], conf)
             roots[i] = roots[i].children[action]
 
             # release memory
@@ -163,8 +164,11 @@ def play_against_human(model_file, human_plays_black):
     network.load_state_dict(model['best_network'])
     network.to(device)
 
+    # create a evaluator
+    evaluator = DefaultEvaluator(network, device)
+
     # create a search tree
-    root = TreeNode(None, None, network, device, conf)
+    root = TreeNode(None, None, evaluator, conf)
 
     gui = GUI(conf)
 
@@ -180,7 +184,7 @@ def play_against_human(model_file, human_plays_black):
 
             # perform MCTS
             for _ in range(conf.NUM_SIMULATIONS):
-                tree_search(root, network, device, conf)
+                tree_search(root, evaluator, conf)
 
             # calculate the distribution of action selection
             # temperature tau -> 0
@@ -195,7 +199,7 @@ def play_against_human(model_file, human_plays_black):
         # take the action
         if root.children[action] is None:
             root.children[action] = \
-                TreeNode(root, action, network, device, conf)
+                TreeNode(root, action, evaluator, conf)
         root = root.children[action]
 
         # release memory
