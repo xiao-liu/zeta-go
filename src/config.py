@@ -99,6 +99,9 @@ CONFIGURATIONS = {
         # old games will be discarded if the pool is full
         'EXAMPLE_POOL_SIZE': 500000,
 
+        # frequency of saving progress when generating examples
+        'EXAMPLE_POOL_SAVE_FREQUENCY': 100,
+
         # frequency of checkpoint
         'CHECKPOINT_FREQUENCY': 1000,
 
@@ -154,6 +157,7 @@ CONFIGURATIONS = {
         'GAMES_PER_COMPARISON': 100,
         'WIN_RATE_MARGIN': 0.55,
         'EXAMPLE_POOL_SIZE': 100000,
+        'EXAMPLE_POOL_SAVE_FREQUENCY': 100,
         'CHECKPOINT_FREQUENCY': 1000,
 
         # ---- resignation settings ----
@@ -204,6 +208,7 @@ Config = collections.namedtuple(
         'GAMES_PER_COMPARISON',
         'WIN_RATE_MARGIN',
         'EXAMPLE_POOL_SIZE',
+        'EXAMPLE_POOL_SAVE_FREQUENCY',
         'CHECKPOINT_FREQUENCY',
         'RESIGN_REGRET_FRAC',
         'RESIGN_SAMPLE_RATE',

@@ -254,6 +254,10 @@ Following is an introduction to each file:
   The code that calculates the threshold for resignation based on recent
   self-play history.
 
+* `state.py`
+
+  The class that contains the necessary state for training.
+
 * `train.py`
 
   The code to train a new model/resume training from a previous checkpoint.

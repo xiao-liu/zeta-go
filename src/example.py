@@ -12,7 +12,8 @@ from resign import ResignManager
 
 class ExamplePool:
 
-    def __init__(self, conf):
+    def __init__(self, model_dir, conf):
+        self.model_dir = model_dir
         self.conf = conf
 
         # the list that stores examples
@@ -21,6 +22,10 @@ class ExamplePool:
         # the length (i.e., number of examples) of each game
         self.game_length = []
 
+        # number of remaining games
+        # used to resume generation from an interrupted one
+        self.remaining_games = 0
+
         # the random permutation used to shuffle the examples
         self.permutation = None
 
@@ -28,7 +33,36 @@ class ExamplePool:
         self.pos = 0
 
         # resignation manager
-        self.resign_mgr = ResignManager(conf)
+        self.resign_mgr = ResignManager(self.conf)
+
+    def state_dict(self):
+        return {
+            'example_pool': self.example_pool,
+            'game_length': self.game_length,
+            'remaining_games': self.remaining_games,
+            'permutation': self.permutation,
+            'pos': self.pos,
+            'resign_mgr': self.resign_mgr,
+        }
+
+    def save(self, iteration):
+        torch.save(
+            self.state_dict(),
+            f'{self.model_dir}/example_pool_checkpoint_[iter_{iteration}].pt',
+        )
+
+    def load(self, state_dict):
+        self.example_pool = state_dict['example_pool']
+        self.game_length = state_dict['game_length']
+        self.remaining_games = state_dict['remaining_games']
+        self.permutation = state_dict['permutation']
+        self.pos = state_dict['pos']
+        self.resign_mgr = state_dict['resign_mgr']
+
+    def prepare_generation(self):
+        self.remaining_games = self.conf.GAMES_PER_ITERATION
+        self.permutation = None
+        self.pos = 0
 
     def _worker_job(self, worker_id, num_games, num_active_workers,
                     resign_threshold, evaluator, output_queue):
@@ -43,8 +77,8 @@ class ExamplePool:
             )
         num_active_workers.value -= 1
 
-    def _generate_parallel(self, network, device, num_workers):
-        q, r = divmod(self.conf.GAMES_PER_ITERATION, num_workers)
+    def _generate_parallel(self, iteration, network, device, num_workers):
+        q, r = divmod(self.remaining_games, num_workers)
         num_active_workers = Value('i', num_workers)
         resign_threshold = Value('d', self.resign_mgr.threshold())
         evaluator_mgr = BulkEvaluatorManager([network], device, num_workers)
@@ -78,13 +112,24 @@ class ExamplePool:
                 self.resign_mgr.add(resign_value_history, result)
                 resign_threshold.value = self.resign_mgr.threshold()
 
+            self.remaining_games -= 1
+
+            # periodically save the progress
+            if (self.conf.GAMES_PER_ITERATION - self.remaining_games) \
+                    % self.conf.EXAMPLE_POOL_SAVE_FREQUENCY == 0:
+                self.save(iteration)
+                log.info(
+                    f'[iter={iteration}] ExamplePool: checkpoint saved, '
+                    f'{self.remaining_games} games remaining'
+                )
+
         for worker in workers:
             worker.join()
         server.join()
 
-    def _generate(self, network, device):
+    def _generate(self, iteration, network, device):
         evaluator = DefaultEvaluator(network, device)
-        for i in range(self.conf.GAMES_PER_ITERATION):
+        for i in range(self.remaining_games):
             log.info(f'starting self-play {i}...')
             examples, resign_value_history, result = self_play(
                 evaluator, self.resign_mgr.threshold(), self.conf)
@@ -96,11 +141,22 @@ class ExamplePool:
             if resign_value_history is not None:
                 self.resign_mgr.add(resign_value_history, result)
 
-    def generate_examples(self, network, device, num_workers):
+            self.remaining_games -= 1
+
+            # periodically save the progress
+            if (self.conf.GAMES_PER_ITERATION - self.remaining_games) \
+                    % self.conf.EXAMPLE_POOL_SAVE_FREQUENCY == 0:
+                self.save(iteration)
+                log.info(
+                    f'[iter={iteration}] ExamplePool: checkpoint saved, '
+                    f'{self.remaining_games} games remaining'
+                )
+
+    def generate_examples(self, iteration, network, device, num_workers):
         if num_workers > 1:
-            self._generate_parallel(network, device, num_workers)
+            self._generate_parallel(iteration, network, device, num_workers)
         else:
-            self._generate(network, device)
+            self._generate(iteration, network, device)
 
         # discard old examples when pool is full
         if len(self.game_length) > self.conf.EXAMPLE_POOL_SIZE:
