@@ -31,8 +31,7 @@ def tree_search(root, evaluator, conf):
     node = root
 
     # prepare Dirichlet noise for the root node
-    # pass is always legal
-    num_legal_actions_of_root = 1
+    num_legal_actions_of_root = 0
     for action in range(conf.NUM_ACTIONS - 1):
         if root.go.legal_play(*divmod(action, conf.BOARD_SIZE)):
             num_legal_actions_of_root += 1
@@ -58,7 +57,7 @@ def tree_search(root, evaluator, conf):
                 continue
             q = 0.0 if node.n[action] == 0 else node.w[action] / node.n[action]
             p = node.p[action]
-            if node == root:
+            if node == root and action != conf.PASS:
                 # introduce additional Dirichlet noise for the root
                 p += conf.DIRICHLET_EPSILON * (noise.pop() - p)
             ucb = q + conf.C_PUCT * p * sqrt_sum_n / (1.0 + node.n[action])
