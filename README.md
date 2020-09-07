@@ -105,6 +105,13 @@ from the opponent's perspective. Actually you need to repeatedly negate the
 value at the backup stage of MCTS as well, and the paper does not emphasize
 this. See the code at the end of `mcts.py`.)
 
+* ZetaGo excludes all the legal moves that fill in own (size-one) eyes.
+I leverage this heuristic because I have very limited computation power.
+Without it, both players in the self-play keep capturing their own stones until
+the maximum number of moves, resulting data of very low quality.
+You can easily disable this by setting `allow_filling_in_own_eye=True` when
+calling `go.legal_play()`.
+
 # Usage
 ZetaGo provides three basic functions:
 * Train a new model;

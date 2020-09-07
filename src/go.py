@@ -372,7 +372,7 @@ class Go:
         return True
 
     # determine if placing a stone on (x, y) is a legal play
-    def legal_play(self, x, y, ignore_ko=False):
+    def legal_play(self, x, y, ignore_ko=False, allow_filling_in_own_eye=False):
         b = self.board
         # (x, y) must be on the board
         if not b.on_board(x, y):
@@ -388,9 +388,22 @@ class Go:
                 and b.find(self.previous_x, self.previous_y) == \
                 captured_chains[0]:
             return False
-        # the play is legal as long as we can capture opponent's
-        # stones, or it does not cause suicide
-        return len(captured_chains) != 0 or not self.suicide(x, y)
+        # the play is illegal if it causes suicide without capturing
+        # any opponent's stones
+        if self.suicide(x, y) and len(captured_chains) == 0:
+            return False
+        # now the play is legal if filling in own eye is allowed
+        if allow_filling_in_own_eye:
+            return True
+        # otherwise check if the play fills in own eye
+        adjacent_chains = SmallSet(4)
+        for dx, dy in _directions:
+            if b.on_board(x + dx, y + dy):
+                if b.color(x + dx, y + dy) != self.turn:
+                    return True
+                else:
+                    adjacent_chains.add(b.find(x + dx, y + dy))
+        return len(adjacent_chains) != 1
 
     # try to place a stone on (x, y)
     # return true if (x, y) is a legal play, return false otherwise
